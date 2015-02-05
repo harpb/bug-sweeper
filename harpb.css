@@ -1,0 +1,17 @@
+body{
+    width: 1280px;
+    margin: auto;
+}
+
+.cells .cell{
+    width: 4em;
+    height: 4em;
+    line-height: 4em;
+    margin: 0px 0px 2px 0px;
+    padding: 0px;
+    display: inline-block;
+    /*border: 1px solid #ddd;*/
+    text-align: center;
+    vertical-align: middle;
+    /*background: #eee;*/
+}
