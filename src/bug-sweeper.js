@@ -232,8 +232,8 @@ var BugSweeperView = React.createClass({
     getInitialState: function() {
         return {
             maze: [],
-            mazeLength: 5,
-            totalBugs: 24,
+            mazeLength: 8,
+            totalBugs: 10,
             totalViews: 0,
             version: 0
         };
