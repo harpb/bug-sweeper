@@ -1,9 +1,4 @@
 var BUG_CHAR = 'x';
-var bugs = [
-    [1, 2, 3],
-    [1, 0, 2],
-    [1, 2, 3],
-];
 
 var getPosition = function(index, length){
     var row = Math.floor(index / length);
@@ -19,7 +14,7 @@ var getBugCount = function(index, maze){
             if(i < 0 || j < 0 || i >= maze.length || j >= maze.length){
                 continue;
             }
-            if(maze[i][j] == BUG_CHAR){
+            if(maze[i][j] && maze[i][j].value == BUG_CHAR){
                 count += 1;
             }
         }
@@ -29,7 +24,7 @@ var getBugCount = function(index, maze){
 var createMaze = function(totalBugs, length){
     var totalCells = length * length;
     //console.info(typeof totalBugs, typeof length, totalBugs, length);
-    if(totalBugs > totalCells){
+    if(totalBugs > totalCells - 1){
         throw 'Too Many Bugs, Not Enough Cells. Ideally, number of bugs should be half of total cells.';
     }
     var maze = new Array(length);
@@ -40,7 +35,12 @@ var createMaze = function(totalBugs, length){
         var randomIndex = _.random(0, totalCells - 1);
         var position = getPosition(randomIndex, length);
         if(!maze[position[0]][position[1]]){
-            maze[position[0]][position[1]] = BUG_CHAR;
+            maze[position[0]][position[1]] = {
+                column: position[1],
+                index: randomIndex,
+                row: position[0],
+                value: BUG_CHAR
+            };
         }
         else{
             i -= 1;
@@ -49,14 +49,57 @@ var createMaze = function(totalBugs, length){
 
     for(var i = 0; i < totalCells; i++){
         var position = getPosition(i, length);
-        if(maze[position[0]][position[1]] === BUG_CHAR){
+        if(maze[position[0]][position[1]]){
             continue;
         }
-        maze[position[0]][position[1]] = getBugCount(i, maze);
+        maze[position[0]][position[1]] = {
+            column: position[1],
+            index: i,
+            row: position[0],
+            value: getBugCount(i, maze)
+        }
     }
     return maze;
 }
 
+var moveBugAround = function(maze, index){
+    var totalCells = maze.length * maze.length;
+    for(var i = (index + 1) % totalCells; i != index; i = (i + 1) % totalCells)
+    {
+        var position = getPosition(i, maze.length);
+        if(maze[position[0]][position[1]].value !== BUG_CHAR){
+            maze[position[0]][position[1]].value = BUG_CHAR;
+            break;
+        }
+    }
+    var position = getPosition(index, maze.length);
+    maze[position[0]][position[1]].value = '';
+    for(var i = 0; i < totalCells; i++){
+        var position = getPosition(i, maze.length);
+        if(maze[position[0]][position[1]].value === BUG_CHAR){
+            continue;
+        }
+        maze[position[0]][position[1]] = {
+            column: position[1],
+            index: i,
+            row: position[0],
+            value: getBugCount(i, maze)
+        }
+    }
+}
+
+var getAvailableMoves = function(maze){
+    var totalCells = maze.length * maze.length;
+    var moves = []
+    for(var i = 0; i < totalCells; i++){
+        var position = getPosition(i, maze.length);
+        if(maze[position[0]][position[1]].value > 0){
+            moves.push(position);
+        }
+    }
+    console.info('getAvailableMoves', moves.length);
+    return moves;
+}
 var CellView = React.createClass({
     getInitialState: function() {
         return {
@@ -65,32 +108,66 @@ var CellView = React.createClass({
         };
     },
 
+    componentDidMount: function(){
+        //if(!this.isBug()){
+        //    this.setState({'viewed': true});
+        //}
+        this.props.data.view = this
+    },
+
+    componentDidUpdate: function(prevProps, prevState){
+        this.props.onCellUpdated(this,  this.props.data);
+    },
+
     handleClick: function(event) {
-        this.setState({viewed: true});
-        if(this.isBug()){
-            this.props.onInfection(this);
-        }
+        this.onView();
     },
 
     isBug: function(){
-        return this.props.data === BUG_CHAR;
+        return this.props.data.value === BUG_CHAR;
+    },
+
+    isViewed: function(event) {
+        return this.state.viewed;
+    },
+
+    isZero: function(){
+        return this.props.data.value === 0;
     },
 
     onFlag: function(event) {
-        console.info("onFlag", this.state);
+        //console.info("onFlag", this.state);
         this.setState({flagged: true});
         event.preventDefault();
     },
+
+    onView: function(silenceZeroReveal) {
+        if(silenceZeroReveal === undefined){
+            silenceZeroReveal = false;
+        }
+
+        if(this.state.viewed){
+            return;
+        }
+
+        this.props.onViewCell(this,  this.props.data);
+
+        this.setState({viewed: true});
+        if(!silenceZeroReveal && this.isZero()){
+            this.props.onZeroReveal(this,  this.props.data);
+        }
+    },
+
     render: function() {
         var text = '?';
         var classString = 'ui button cell';
         if(this.state.viewed){
-            if(this.props.data === BUG_CHAR ){
+            if(this.isBug()){
                 text = (<i className="bug icon"></i>);
                 classString += ' button ui negative';
             }else{
                 classString = 'cell';
-                text = this.props.data;
+                text = !this.isZero() ? this.props.data.value : '';
             }
         }
         else if(this.state.flagged){
@@ -110,7 +187,10 @@ var CellRowView = React.createClass({
         var self = this;
         var cellNodes = this.props.data.map(function (cell) {
             return (
-                <CellView data={cell} onInfection={self.props.onInfection}/>
+                <CellView data={cell}
+                    onCellUpdated={self.props.onCellUpdated}
+                    onViewCell={self.props.onViewCell}
+                    onZeroReveal={self.props.onZeroReveal}/>
             );
         });
         return (
@@ -130,15 +210,6 @@ var IntegerInputView = React.createClass({
         if(isNaN(newValue)){
             newValue = '';
         }
-        //if(newValue !== ""){
-        //    console.info("min", isNaN(newValue), newValue < this.props.min, newValue > this.props.max);
-        //    if(this.props.min && newValue < this.props.min){
-        //        newValue = this.props.min;
-        //    }
-        //    else if(this.props.max && newValue > this.props.max){
-        //        newValue = this.props.max;
-        //    }
-        //}
         this.setState({
             data: newValue
         });
@@ -157,11 +228,13 @@ var IntegerInputView = React.createClass({
 
 
 var BugSweeperView = React.createClass({
+
     getInitialState: function() {
         return {
             maze: [],
-            mazeLength: 10,
-            totalBugs: 25,
+            mazeLength: 8,
+            totalBugs: 10,
+            totalViews: 0,
             version: 0
         };
     },
@@ -183,19 +256,32 @@ var BugSweeperView = React.createClass({
             this.setState({
                 'maze': createMaze(this.state.totalBugs, this.state.mazeLength)
             });
-            this.setState({'timer': 0});
-            this.setState({'version': this.state.version + 1});
-            this.setState({'interval': setInterval(this.onUpdateTimer, 1000)});
+            this.setState({
+                interval: setInterval(this.onUpdateTimer, 1000),
+                timer: 0,
+                totalViews: 0,
+                version: this.state.version + 1
+            });
         }
         catch(err){
             alert(err);
         }
     },
 
+    onCompleted: function(){
+        this.restartMaze();
+        alert("Congratulations! You won the game.")
+    },
 
     onInfection: function(){
         this.restartMaze();
         alert("You have been infected with the bug!")
+    },
+
+    onCellUpdated: function(view, data){
+        if(view.isViewed() && view.isBug()){
+            this.onInfection();
+        }
     },
 
     onUpdate: function(key, parent, newValue){
@@ -206,16 +292,55 @@ var BugSweeperView = React.createClass({
         this.setState({timer: this.state.timer + 1})
     },
 
+    onViewCell: function(view, data){
+        if(this.state.totalViews === 0 && view.isBug()){
+            moveBugAround(this.state.maze, data.index);
+        }
+        if(!view.isZero() && !view.isBug()){
+            this.setState({totalViews: this.state.totalViews + 1});
+            if(getAvailableMoves(this.state.maze).length == this.state.totalViews + 1){
+                this.onCompleted();
+            }
+        }
+    },
+
+    onZeroReveal: function(view, cell){
+        //console.info('onZeroReveal', view, data);
+        var maze = this.state.maze;
+        var cells = [cell];
+        for (var counter = 0; counter < cells.length; counter++) {
+            var data = cells[counter];
+            for(var i = data.row - 1; i <= data.row + 1; i++){
+                for(var j  = data.column - 1; j <= data.column + 1; j++){
+                    if(i < 0 || j < 0 || i >= maze.length || j >= maze.length
+                        || (i != data.row && j != data.column) || (i == data.row && j == data.column)){
+                        continue;
+                    }
+                    if(maze[i][j].view.isZero() && !maze[i][j].view.isViewed()){
+                        maze[i][j].view.onView(true);
+                        if(cells.indexOf(maze[i][j]) === -1){
+                            cells.push(maze[i][j]);
+                        }
+                    }
+                }
+            }
+        }
+    },
+
     render: function() {
         var self = this;
         var cellRowNodes = this.state.maze.map(function (cellRow) {
             return (
-                <CellRowView data={cellRow} key={self.state.version + cellRow} onInfection={self.onInfection}/>
+                <CellRowView data={cellRow}
+                    key={self.state.version + cellRow[0].index}
+                    onCellUpdated={self.onCellUpdated}
+                    onViewCell={self.onViewCell}
+                    onZeroReveal={self.onZeroReveal}/>
             );
         });
         return (
             <div className="cells">
-                <h2 className="ui dividing header">Work that muscle</h2>
+                <h2 className="ui dividing header">Work that muscle V.{self.state.version}</h2>
                 <form className="ui inline form">
                     <div className="fields">
                         <div className="one wide field">
@@ -241,6 +366,7 @@ var BugSweeperView = React.createClass({
         );
     }
 });
+
 React.render(
     <BugSweeperView/>,
     document.getElementById('bug-sweeper')
