@@ -313,12 +313,12 @@ var BugSweeperView = React.createClass({displayName: "BugSweeperView",
             for(var i = data.row - 1; i <= data.row + 1; i++){
                 for(var j  = data.column - 1; j <= data.column + 1; j++){
                     if(i < 0 || j < 0 || i >= maze.length || j >= maze.length
-                        || (i != data.row && j != data.column) || (i == data.row && j == data.column)){
+                        || (i == data.row && j == data.column)){
                         continue;
                     }
-                    if(maze[i][j].view.isZero() && !maze[i][j].view.isViewed()){
+                    if(!maze[i][j].view.isViewed()){
                         maze[i][j].view.onView(true);
-                        if(cells.indexOf(maze[i][j]) === -1){
+                        if(cells.indexOf(maze[i][j]) === -1 && maze[i][j].view.isZero()){
                             cells.push(maze[i][j]);
                         }
                     }
